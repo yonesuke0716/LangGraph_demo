@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  workspace:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    environment:
+      PYTHONPATH: /workspace
+      OPENAI_API_KEY: "your openai api key"
+    volumes:
+      - ..:/workspace
+    command: sleep infinity
+    shm_size: 8gb

@@ -1,62 +1,35 @@
 from typing import Annotated, Literal
 from typing_extensions import TypedDict
+
 from langgraph.graph import StateGraph
-from langchain_core.runnables import RunnableConfig
-import random
-from IPython.display import Image, display
+from langgraph.graph.message import add_messages
+from langchain_openai import ChatOpenAI
+
+
+llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
 
 
 class State(TypedDict):
-    value: str
+    messages: Annotated[list, add_messages]
+    api_call_count: int
 
 
-def start_node(state: State, config: RunnableConfig):
-    return {"value": "1"}
+def chatbot(state: State):
+    if not state["api_call_count"]:
+        state["api_call_count"] = 0
+    state["api_call_count"] += 1
+    return {
+        "messages": [llm.invoke(state["messages"])],
+        "api_call_count": state["api_call_count"],
+    }
 
 
-def node2(state: State, config: RunnableConfig):
-    return {"value": "2"}
+graph = StateGraph(State)
 
+graph.add_node("chatbot", chatbot)
+graph.set_entry_point("chatbot")
+graph.set_finish_point("chatbot")
+runner = graph.compile()
 
-def node3(state: State, config: RunnableConfig):
-    return {"value": "3"}
-
-
-graph_builder = StateGraph(State)
-graph_builder.add_node("start_node", start_node)
-graph_builder.add_node("node2", node2)
-graph_builder.add_node("node3", node3)
-graph_builder.add_node("end_node", lambda state: {"value": state["value"]})
-
-graph_builder.set_entry_point("start_node")
-
-
-def routing(state: State, config: RunnableConfig) -> Literal["node2", "node3"]:
-    random_num = random.randint(0, 1)
-    if random_num == 0:
-        return "node2"
-    else:
-        return "node3"
-
-
-# 第一引数には、一つ前のNodeを指定する
-# 第二引数には、分岐を決定する関数を指定する
-graph_builder.add_conditional_edges(
-    "start_node",
-    routing,
-)
-
-graph_builder.add_edge("node2", "end_node")
-graph_builder.add_edge("node3", "end_node")
-
-graph_builder.set_finish_point("end_node")
-
-# Graphをコンパイル
-graph = graph_builder.compile()
-
-# Graphの実行(引数にはStateの初期値を渡す)
-# print(graph.invoke({"value": ""}, debug=True))
-
-# print(graph.get_graph().draw_mermaid())
-
-Image(graph.get_graph().draw_mermaid_png())
+response = runner.invoke({"messages": ["こんにちは"], "api_call_count": 1})
+print(response["messages"][-1].content)
